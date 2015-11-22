@@ -1,0 +1,83 @@
+---
+title: "Practival Machine Learning Course Project"
+author: "Vasily Vinogradov"
+date: "November 21, 2015"
+output: html_document
+---
+
+#Getting and cleaning data
+
+```{r, echo=TRUE}
+library(caret)
+library(knitr)
+trn <- read.csv("pml-training.csv", na.strings=c("NA",""), strip.white=T)
+tst <- read.csv('pml-testing.csv', na.strings=c("NA",""), strip.white=T)
+```
+
+We can see that data contains many NA values that means that not all features will be very useful for prediction. Variables that contains "kurtosis","skewness","max","min","amplitude","avg","stddev","var" in names looks like aggregate results for previous rows. Therefore, we cannot use them as features.
+
+```{r,echo=TRUE}
+column_patterns <- c("kurtosis","skewness","max","min","amplitude","avg","stddev","var")
+columns_to_exclude <- c(1:7,unlist(sapply(column_patterns, function(pat){grep(pat, names(trn), value = F)})))
+
+trains <- trn[, -columns_to_exclude]
+tests <- tst[, -columns_to_exclude]
+dim(trains)
+```
+
+We have 52 features left (53 with classe) to build our model.
+
+
+#Processing data
+
+Lets split our training dataset into two: training and validation. 
+
+```{r, echo=TRUE,warning=FALSE}
+set.seed(1024)
+inTrain <- createDataPartition(trains$classe, p=0.7, list=F)
+training_set <- trains[inTrain,]
+validation_set <- trains[-inTrain,]
+```
+
+#Training
+
+Now we can train a Random Forest model on the training_set. We choose parameters to reduce running time.
+
+```{r, echo=TRUE,warning=FALSE}
+ctrl<-trainControl(method = "cv", number = 5,allowParallel = TRUE)
+model_rf<-train(classe ~ ., data=training_set, model="rf", trControl=ctrl)
+```
+
+#Validation
+
+To validate our model we perfomr prediction on validation_set.
+
+```{r, echo=TRUE,warning=FALSE}
+prediction_rf<-predict(model_rf, newdata=validation_set)
+```
+
+Now we can compare predictions and known classes and find out-of-model error from confusionMatrix function
+
+```{r,warning=FALSE}
+cm<-confusionMatrix(prediction_rf, validation_set$classe)
+cm
+```
+
+out-of-model error is 
+
+```{r}
+error<-unname(1-cm$overall["Accuracy"])
+error
+```
+
+
+#Prediction
+
+Let us do prediction with our trained model on unknown set.
+
+```{r}
+predict_final<-predict(model_rf,newdata=tests)
+predict_final
+```
+
+
